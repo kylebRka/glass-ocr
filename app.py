@@ -52,6 +52,17 @@ def doc_converter():
     return next((exe for exe in candidates if exe and Path(exe).is_file()), None)
 
 
+def pages_application():
+    if sys.platform != "darwin":
+        return None
+    for root in (Path("/Applications"), Path.home() / "Applications"):
+        for name in ("Pages.app", "Pages Creator Studio.app"):
+            candidate = root / name
+            if (candidate / "Contents/Info.plist").is_file():
+                return candidate
+    return None
+
+
 def command(args, timeout=900):
     try:
         result = subprocess.run(args, capture_output=True, timeout=timeout)
@@ -68,7 +79,7 @@ PAGES_SCRIPT = """
 on run argv
     set sourceFile to POSIX file (item 1 of argv)
     set destinationFile to POSIX file (item 2 of argv)
-    tell application id "com.apple.Pages"
+    tell application PAGES_APP
         set importedDocument to open sourceFile
         try
             save importedDocument in destinationFile
@@ -99,10 +110,12 @@ def export_legacy(work, data, target):
         if not data.startswith(bytes.fromhex("D0CF11E0A1B11AE1")):
             raise ConversionError("legacy")
         return data
-    if sys.platform != "darwin":
+    application = pages_application()
+    if not application:
         raise ConversionError("mac")
     result.touch()
-    command(["/usr/bin/osascript", "-e", PAGES_SCRIPT, str(source), str(result)], timeout=120)
+    script = PAGES_SCRIPT.replace("PAGES_APP", json.dumps(str(application), ensure_ascii=False))
+    command(["/usr/bin/osascript", "-e", script, str(source), str(result)], timeout=120)
     if not is_zipfile(result):
         raise ConversionError("legacy")
     with ZipFile(result) as archive:
@@ -193,7 +206,7 @@ class Handler(BaseHTTPRequestHandler):
             r"[1-9][0-9]{0,5}(?:-[1-9][0-9]{0,5})?(?:,[1-9][0-9]{0,5}(?:-[1-9][0-9]{0,5})?)*", pages
         )):
             return self.error(400, "options")
-        if target == "pages" and sys.platform != "darwin":
+        if target == "pages" and not pages_application():
             return self.error(422, "mac")
         if target == "doc" and not doc_converter():
             return self.error(422, "libreoffice")
