@@ -6,11 +6,13 @@ from tempfile import TemporaryDirectory
 import errno
 from threading import Thread
 import unittest
+import subprocess
+import sys
 from unittest.mock import patch
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
-from app import ConversionError, Handler, ThreadingHTTPServer, convert
+from app import ConversionError, Handler, ThreadingHTTPServer, convert, export_legacy
 from exports import SHEET, WORD, Table, docx, markdown_blocks, xlsx
 
 
@@ -66,6 +68,17 @@ class ExportTests(unittest.TestCase):
         second = xml(data, "xl/worksheets/sheet2.xml")
         self.assertEqual(second.find(".//s:mergeCell", ns).attrib["ref"], "A1:B2")
         self.assertEqual(second.find(".//s:c[@r='C2']/s:is/s:t", ns).text, "100\n200")
+
+    @unittest.skipUnless(sys.platform == "darwin", "macOS textutil required")
+    def test_native_word_97_export_on_macos(self):
+        with TemporaryDirectory() as directory:
+            folder = Path(directory)
+            data = export_legacy(folder, docx(self.blocks), "doc")
+            output = folder / "opened.doc"
+            output.write_bytes(data)
+            html = subprocess.check_output(["/usr/bin/textutil", "-convert", "html", "-stdout", output])
+            self.assertIn("<table", html.decode("utf-8"))
+            self.assertIn("Кириллица", html.decode("utf-8"))
 
     def test_conversion_flags_and_empty_tables(self):
         with TemporaryDirectory() as directory, patch("app.find_spec", return_value=True):

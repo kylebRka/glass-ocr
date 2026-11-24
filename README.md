@@ -8,7 +8,7 @@ A local PDF converter for macOS (Apple silicon) and Windows (x64/ARM64). Drop a 
 |---|---|---|
 | .docx | Editable text and tables | LiteParse |
 | .xlsx | One sheet per detected table, with merged cells where detected | LiteParse |
-| .doc | Native Word 97–2003 binary document | LibreOffice installed locally |
+| .doc | Native Word 97–2003 binary document | Built into macOS, LibreOffice on Windows |
 | .pages | Native Apple Pages document | macOS with Apple Pages and Automation permission |
 
 The app binds to the loopback address. PDFs are processed locally in a temporary directory and cleared after each job. The initial dependency and model downloads require internet. The app is distributed as source with launch scripts.
@@ -35,7 +35,7 @@ py -3 -m venv .venv
 .\start-windows.bat
 ```
 
-After setup, use the last command or double-click the launcher. Close its terminal to stop the app. For .doc export, install [LibreOffice](https://www.libreoffice.org/download/download-libreoffice/) in the default location or add its executable to PATH. For .pages, install Apple Pages, then allow the requested Apple Events permission if macOS asks. You can also open the DOCX export directly in Pages and save it there.
+After setup, use the last command or double-click the launcher. Close its terminal to stop the app. For .doc export on Windows, install [LibreOffice](https://www.libreoffice.org/download/download-libreoffice/) in the default location or add its executable to PATH. For .pages, install Apple Pages, then allow the requested Apple Events permission if macOS asks. You can also open the DOCX export directly in Pages and save it there.
 
 ## Use
 

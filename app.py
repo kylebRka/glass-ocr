@@ -40,12 +40,14 @@ class ConversionError(Exception):
         self.key, self.detail, self.http_status = key, detail, http_status
 
 
-def libreoffice():
+def doc_converter():
+    if sys.platform == "darwin":
+        return "/usr/bin/textutil"
     candidates = [
-        shutil.which("soffice"),
-        "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-        *(str(Path(os.environ.get(key, "C:/Program Files")) / "LibreOffice/program/soffice.exe")
+        shutil.which("soffice.com"),
+        *(str(Path(os.environ.get(key, "C:/Program Files")) / "LibreOffice/program/soffice.com")
           for key in ("ProgramFiles", "ProgramFiles(x86)")),
+        shutil.which("soffice"),
     ]
     return next((exe for exe in candidates if exe and Path(exe).is_file()), None)
 
@@ -85,17 +87,21 @@ def export_legacy(work, data, target):
     source.write_bytes(data)
     result = source.with_suffix("." + target)
     if target == "doc":
-        writer = libreoffice()
+        writer = doc_converter()
         if not writer:
             raise ConversionError("libreoffice")
-        command([writer, f"-env:UserInstallation={(work / 'lo-profile').as_uri()}", "--headless",
-                 "--convert-to", "doc:MS Word 97", "--outdir", str(work), str(source)], timeout=120)
+        if sys.platform == "darwin":
+            command([writer, "-convert", "doc", "-output", str(result), str(source)], timeout=120)
+        else:
+            command([writer, f"-env:UserInstallation={(work / 'lo-profile').as_uri()}", "--headless",
+                     "--convert-to", "doc:MS Word 97", "--outdir", str(work), str(source)], timeout=120)
         data = result.read_bytes() if result.is_file() else b""
         if not data.startswith(bytes.fromhex("D0CF11E0A1B11AE1")):
             raise ConversionError("legacy")
         return data
     if sys.platform != "darwin":
         raise ConversionError("mac")
+    result.touch()
     command(["/usr/bin/osascript", "-e", PAGES_SCRIPT, str(source), str(result)], timeout=120)
     if not is_zipfile(result):
         raise ConversionError("legacy")
@@ -162,7 +168,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed():
             return self.error(403, "forbidden")
         if self.path == "/config":
-            data = {"token": TOKEN, "mac": sys.platform == "darwin", "doc": bool(libreoffice())}
+            data = {"token": TOKEN, "mac": sys.platform == "darwin", "doc": bool(doc_converter())}
             return self.reply(200, "application/json", json.dumps(data).encode())
         if self.path not in ASSETS:
             return self.error(404, "failed")
@@ -189,7 +195,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.error(400, "options")
         if target == "pages" and sys.platform != "darwin":
             return self.error(422, "mac")
-        if target == "doc" and not libreoffice():
+        if target == "doc" and not doc_converter():
             return self.error(422, "libreoffice")
         if not BUSY.acquire(blocking=False):
             return self.error(409, "busy")
